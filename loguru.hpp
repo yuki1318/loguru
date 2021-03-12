@@ -84,11 +84,11 @@ Website: www.ilikebigbits.com
 #endif
 
 // Disable all warnings from gcc/clang:
-#if defined(__clang__)
-	#pragma clang system_header
-#elif defined(__GNUC__)
-	#pragma GCC system_header
-#endif
+// #if defined(__clang__)
+// 	#pragma clang system_header
+// #elif defined(__GNUC__)
+// 	#pragma GCC system_header
+// #endif
 
 #ifndef LOGURU_HAS_DECLARED_FORMAT_HEADER
 #define LOGURU_HAS_DECLARED_FORMAT_HEADER
@@ -317,9 +317,10 @@ namespace loguru
 		Verbosity_OFF     = -9, // Never do LOG_F(OFF)
 
 		// Prefer to use ABORT_F or ABORT_S over LOG_F(FATAL) or LOG_S(FATAL).
-		Verbosity_FATAL   = -3,
-		Verbosity_ERROR   = -2,
-		Verbosity_WARNING = -1,
+		Verbosity_FATAL   = -4,
+		Verbosity_ERROR   = -3,
+		Verbosity_WARNING = -2,
+		Verbosity_STS     = -1,
 
 		// Normal messages. By default written to stderr.
 		Verbosity_INFO    =  0,
@@ -329,17 +330,19 @@ namespace loguru
 
 		// Verbosity levels 1-9 are generally not written to stderr, but are written to file.
 		Verbosity_1       = +1,
+		Verbosity_DEBUG   = +1,
 		Verbosity_2       = +2,
 		Verbosity_3       = +3,
 		Verbosity_4       = +4,
 		Verbosity_5       = +5,
+		Verbosity_TRACE   = +5,
 		Verbosity_6       = +6,
 		Verbosity_7       = +7,
 		Verbosity_8       = +8,
 		Verbosity_9       = +9,
 
 		// Do not use higher verbosity levels, as that will make grepping log files harder.
-		Verbosity_MAX     = +9,
+		Verbosity_MAX      = +9,
 	};
 
 	struct Message
@@ -1055,7 +1058,7 @@ namespace loguru
 #define LOG_SCOPE_F(verbosity_name, ...)                                                           \
 	VLOG_SCOPE_F(loguru::Verbosity_ ## verbosity_name, __VA_ARGS__)
 
-#define LOG_SCOPE_FUNCTION(verbosity_name) LOG_SCOPE_F(verbosity_name, __func__)
+#define LOG_SCOPE_FUNCTION(verbosity_name) LOG_SCOPE_F(verbosity_name, "%s", __func__)
 
 // -----------------------------------------------
 // ABORT_F macro. Usage:  ABORT_F("Cause of error: %s", error_str);

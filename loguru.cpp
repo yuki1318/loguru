@@ -7,6 +7,8 @@
 #pragma GCC diagnostic ignored "-Wc++98-compat-pedantic"
 #pragma GCC diagnostic ignored "-Wexit-time-destructors"
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wformat-security"
+#pragma GCC diagnostic ignored "-Wformat-truncation="
 #pragma GCC diagnostic ignored "-Wglobal-constructors"
 #pragma GCC diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
@@ -16,6 +18,7 @@
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #pragma GCC diagnostic ignored "-Wunused-macros"
 #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma GCC diagnostic ignored "-Wattributes"
 #else
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -23,6 +26,8 @@
 #endif // _MSC_VER
 #endif
 
+#define LOGURU_WITH_FILEABS 1
+#define LOGURU_WITH_STREAMS 1
 #include "loguru.hpp"
 
 #ifndef LOGURU_HAS_BEEN_IMPLEMENTED
@@ -54,6 +59,7 @@
 
 #ifdef _WIN32
 	#include <direct.h>
+	#include <sys/stat.h> // mkdir
 
 	#define localtime_r(a, b) localtime_s(b, a) // No localtime_r with MSVC, but arguments are swapped for localtime_s
 #else
@@ -129,7 +135,9 @@
 		#define _WIN32_WINNT 0x0502
 	#endif
 	#define WIN32_LEAN_AND_MEAN
-	#define NOMINMAX
+	#ifndef NOMINMAX
+		#define NOMINMAX
+	#endif
 	#include <windows.h>
 #endif
 
@@ -454,11 +462,11 @@ namespace loguru
 	static const char* indentation(unsigned depth)
 	{
 		static const char buff[] =
-		".   .   .   .   .   .   .   .   .   .   " ".   .   .   .   .   .   .   .   .   .   "
-		".   .   .   .   .   .   .   .   .   .   " ".   .   .   .   .   .   .   .   .   .   "
-		".   .   .   .   .   .   .   .   .   .   " ".   .   .   .   .   .   .   .   .   .   "
-		".   .   .   .   .   .   .   .   .   .   " ".   .   .   .   .   .   .   .   .   .   "
-		".   .   .   .   .   .   .   .   .   .   " ".   .   .   .   .   .   .   .   .   .   ";
+		". . . . . . . . . . " ". . . . . . . . . . "
+		". . . . . . . . . . " ". . . . . . . . . . "
+		". . . . . . . . . . " ". . . . . . . . . . "
+		". . . . . . . . . . " ". . . . . . . . . . "
+		". . . . . . . . . . " ". . . . . . . . . . ";
 		static const size_t INDENTATION_WIDTH = 4;
 		static const size_t NUM_INDENTATIONS = (sizeof(buff) - 1) / INDENTATION_WIDTH;
 		depth = std::min<unsigned>(depth, NUM_INDENTATIONS);
@@ -473,7 +481,8 @@ namespace loguru
 		for (int arg_it = 1; arg_it < argc; ++arg_it) {
 			auto cmd = argv[arg_it];
 			auto arg_len = strlen(verbosity_flag);
-			if (strncmp(cmd, verbosity_flag, arg_len) == 0 && !std::isalpha(cmd[arg_len], std::locale(""))) {
+			if (strncmp(cmd, verbosity_flag, arg_len) == 0) {
+			// if (strncmp(cmd, verbosity_flag, arg_len) == 0 && !std::isalpha(cmd[arg_len], std::locale(""))) {
 				out_argc -= 1;
 				auto value_str = cmd + arg_len;
 				if (value_str[0] == '\0') {
@@ -695,7 +704,7 @@ namespace loguru
 
 	const char* home_dir()
 	{
-		#ifdef _WIN32
+		#ifdef _MSC_VER
 			char* user_profile;
 			size_t len;
 			errno_t err = _dupenv_s(&user_profile, &len, "USERPROFILE");
@@ -934,8 +943,14 @@ namespace loguru
 				name = "ERR";
 			} else if (verbosity == Verbosity_WARNING) {
 				name = "WARN";
+			} else if (verbosity == Verbosity_STS) {
+				name = "STS";
 			} else if (verbosity == Verbosity_INFO) {
 				name = "INFO";
+			} else if (verbosity == Verbosity_DEBUG) {
+				name = "DEBUG";
+			} else if (verbosity == Verbosity_TRACE) {
+				name = "TRACE";
 			}
 		}
 
@@ -952,17 +967,16 @@ namespace loguru
 
 		// Use standard replacements if callback fails:
 		if (verbosity == Verbosity_INVALID) {
-			if (strcmp(name, "OFF") == 0) {
-				verbosity = Verbosity_OFF;
-			} else if (strcmp(name, "INFO") == 0) {
-				verbosity = Verbosity_INFO;
-			} else if (strcmp(name, "WARNING") == 0) {
-				verbosity = Verbosity_WARNING;
-			} else if (strcmp(name, "ERROR") == 0) {
-				verbosity = Verbosity_ERROR;
-			} else if (strcmp(name, "FATAL") == 0) {
-				verbosity = Verbosity_FATAL;
-			}
+			#define MATCH_LOG_LEVEL(LEVEL, level)	((strcmp(name, LEVEL) == 0) || (strcmp(name, level) == 0))
+			if      MATCH_LOG_LEVEL("OFF"    ,"off"    ) { verbosity = Verbosity_OFF;     }
+			else if MATCH_LOG_LEVEL("TRACE"  ,"trace"  ) { verbosity = Verbosity_TRACE;   }
+			else if MATCH_LOG_LEVEL("DEBUG"  ,"debug"  ) { verbosity = Verbosity_DEBUG;   }
+			else if MATCH_LOG_LEVEL("STS"    ,"sts"    ) { verbosity = Verbosity_STS;     }
+			else if MATCH_LOG_LEVEL("INFO"   ,"info"   ) { verbosity = Verbosity_INFO;    }
+			else if MATCH_LOG_LEVEL("WARNING","warning") { verbosity = Verbosity_WARNING; }
+			else if MATCH_LOG_LEVEL("WARN"   ,"warn"   ) { verbosity = Verbosity_WARNING; }
+			else if MATCH_LOG_LEVEL("ERROR"  ,"error"  ) { verbosity = Verbosity_ERROR;   }
+			else if MATCH_LOG_LEVEL("FATAL"  ,"fatal"  ) { verbosity = Verbosity_FATAL;   }
 		}
 
 		return verbosity;
@@ -1030,6 +1044,7 @@ namespace loguru
 			// Store thread name in thread-local storage at `s_pthread_key_name`
 			(void)pthread_once(&s_pthread_key_once, make_pthread_key_name);
 			(void)pthread_setspecific(s_pthread_key_name, STRDUP(name));
+
 		#elif LOGURU_PTHREADS
 			// Tell the OS the thread name
 			#ifdef __APPLE__
@@ -1099,7 +1114,7 @@ namespace loguru
 				snprintf(buffer, static_cast<size_t>(length), "%X", static_cast<unsigned>(thread_id));
 			}
 		}
-	}
+		}
 
 	// ------------------------------------------------------------------------
 	// Stack traces
@@ -1352,7 +1367,7 @@ namespace loguru
 				if (verbosity > Verbosity_WARNING) {
 					fprintf(stderr, "%s%s%s%s%s%s%s%s\n",
 						terminal_reset(),
-						terminal_dim(),
+						verbosity == Verbosity_STS ? terminal_cyan() : terminal_dim(),
 						message.preamble,
 						message.indentation,
 						verbosity == Verbosity_INFO ? terminal_reset() : "", // un-dim for info
@@ -1362,7 +1377,7 @@ namespace loguru
 				} else {
 					fprintf(stderr, "%s%s%s%s%s%s%s\n",
 						terminal_reset(),
-						verbosity == Verbosity_WARNING ? terminal_yellow() : terminal_red(),
+						verbosity == Verbosity_WARNING ? terminal_yellow() : terminal_light_red(),
 						message.preamble,
 						message.indentation,
 						message.prefix,
